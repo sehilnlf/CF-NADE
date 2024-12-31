@@ -10,7 +10,9 @@ import numpy as np
 class MovieLens1M(H5PYDataset):
     def __init__(self, which_set, **kwargs):
         kwargs.setdefault('load_in_memory', True)
-        self.filename = 'movielens-1m.hdf5'
+        # self.filename = 'movielens-1m.hdf5'
+        self.filename = 'game-ratings.hdf5'
+        
 #         self.sources = ('input_ratings', 'output_ratings', 'input_masks', 'output_masks')
         super(MovieLens1M, self).__init__(self.data_path,
                                           which_set,
@@ -33,7 +35,7 @@ class foo(object):
 if __name__ == '__main__':
     
     f = foo()
-    print f.voltage
-    print 123
+    print( f.voltage)
+    print( 123)
     
     

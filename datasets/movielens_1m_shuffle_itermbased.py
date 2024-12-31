@@ -8,7 +8,7 @@ import numpy as np
 import scipy.io as sio
 import os
 import h5py
-import cv2
+# import cv2
 from scipy.sparse import csr_matrix, lil_matrix
 import random
 
@@ -107,7 +107,9 @@ def write_movie_data(ratings, data_path, output, seed):
     output_r = np.vstack((train_output_ratings, valid_output_ratings, test_output_ratings))
     output_m = np.vstack((train_output_masks, valid_output_masks, test_output_masks))
     
-    
+    import os
+    os.makedirs(output, exist_ok=True)
+
     f = h5py.File(os.path.join(output, 'movielens-1m.hdf5'), 'w')
     input_ratings = f.create_dataset('input_ratings', shape=(n_movies*3, n_users), dtype='int8', data=input_r)
     input_ratings.dims[0].label = 'batch'
@@ -163,12 +165,12 @@ def write_movie_data(ratings, data_path, output, seed):
     f.close()
     
     f = open(os.path.join(output, 'user_dict'), 'wb')
-    import cPickle
-    cPickle.dump(users, f)
+    import pickle
+    pickle.dump(users, f)
     f.close()
     
     f = open(os.path.join(output, 'movie_dict'), 'wb')
-    cPickle.dump(movs, f)
+    pickle.dump(movs, f)
     f.close()
     
     
@@ -186,22 +188,23 @@ if __name__ == "__main__":
 #     main("/Users/yin.zheng/Downloads/ml-1m",
 #          "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-0",
 #          1234)
-    print '1'
-    main("/Users/yin.zheng/Downloads/ml-1m",
-         "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-1",
+    base_path = "D:\Empty\CF-NADE-origin\ml-1m\ml-1m"
+    print('1')
+    main(base_path,
+         r"MovieLens1M-shuffle-itembased-1",
          2341)
-    print '2'
-    main("/Users/yin.zheng/Downloads/ml-1m",
-         "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-2",
+    print( '2')
+    main(base_path,
+         r"MovieLens1M-shuffle-itembased-2",
          3412)
-    print '3'
-    main("/Users/yin.zheng/Downloads/ml-1m",
-         "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-3",
-         4123)
-    print '4'
-    main("/Users/yin.zheng/Downloads/ml-1m",
-         "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-4",
-         1324)
+    # print( '3')
+    # main("/Users/yin.zheng/Downloads/ml-1m",
+    #      "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-3",
+    #      4123)
+    # print( '4')
+    # main("/Users/yin.zheng/Downloads/ml-1m",
+    #      "/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased-4",
+    #      1324)
 #     from fuel.datasets import H5PYDataset
 #     
 #     trainset = H5PYDataset(os.path.join('/Users/yin.zheng/ml_datasets/MovieLens1M-shuffle-itembased', 'movielens-1m.hdf5'),

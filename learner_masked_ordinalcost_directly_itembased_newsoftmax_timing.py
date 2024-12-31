@@ -6,6 +6,8 @@ Created on Nov 25, 2015
 
 
 import theano 
+theano.config.floatX = 'float32'  # Use 32-bit floating point numbers
+import os
 import theano.tensor as T
 import numpy as np
 from blocks.bricks import Rectifier, Softmax, Identity, NDimensionalSoftmax, Tanh, Logistic, Softplus
@@ -38,7 +40,9 @@ def masked_softmax_entropy(h, output_masks, masks):
 
 def convert_onehot_to_gaussian(one_hot_ratings, std=1):
     mask = one_hot_ratings.sum(axis=2)
-    S = np.array([1, 2, 3, 4, 5], dtype='float32')
+    # S = np.array([1, 2, 3, 4, 5], dtype='float32')
+    S = np.array([1, 2], dtype='float32')
+    
     ratings = T.argmax(one_hot_ratings, axis=2) + 1
     scores = ratings.dimshuffle(0, 1, 'x') - S[None, None, :]
     unnormalized_score = T.exp(-(scores ** 2) / (2 * std ** 2))
@@ -89,7 +93,8 @@ class MovieLensTransformer(Transformer):
         
         input_ratings, output_ratings, input_masks, output_masks = batch
         input_shape = input_ratings.shape
-        K = 5
+        # K = 5
+        K = 2
         input_ratings_3d = np.zeros((input_shape[0], input_shape[1], K), 'int8')
         output_ratings_3d = np.zeros_like(input_ratings_3d)
         input_ratings_nonzero = input_ratings.nonzero()
@@ -477,8 +482,9 @@ if __name__ == '__main__':
     sys.argv.pop(0)
     
     
-    input_dim0 = 6040
-    input_dim1 = 5
+    input_dim0 = 7639
+    # input_dim1 = 5
+    input_dim1 = 2
 #     output_dim = 128
     batch_size = int(sys.argv[0])
     n_iter = int(sys.argv[1])
@@ -497,7 +503,25 @@ if __name__ == '__main__':
     alpha = float(sys.argv[13])
     polyak_mu = float(sys.argv[14])
     output_path = sys.argv[15]
-    
+    os.makedirs(output_path, exist_ok=True)  # Create the directory if it doesn't exist
+
+    print("batch_size:", batch_size)
+    print("n_iter:", n_iter)
+    print("look_ahead:", look_ahead)
+    print("lr:", lr)
+    print("b1:", b1)
+    print("b2:", b2)
+    print("epsilon:", epsilon)
+    print("hidden_size:", hidden_size)
+    print("activation_function:", activation_function)
+    print("drop_rate:", drop_rate)
+    print("weight_decay:", weight_decay)
+    print("Optimizer:", Optimizer)
+    print("std:", std)
+    print("alpha:", alpha)
+    print("polyak_mu:", polyak_mu)
+    print("output_path:", output_path)
+
     
     np.random.seed(12345)
     
@@ -582,10 +606,17 @@ if __name__ == '__main__':
                                                     )
                                        )
     
-    rating_freq = np.zeros((6040, 5))
-    init_b = np.zeros((6040, 5))
-    for batch in valid_monitor_stream.get_epoch_iterator():
+    rating_freq = np.zeros((7639, 2))
+    init_b = np.zeros((7639, 2))
+    
+    from tqdm import tqdm
+    for batch in tqdm(valid_monitor_stream.get_epoch_iterator()):
+        
         inp_r, out_r, inp_m, out_m = batch
+        # print("rating_freq shape:", rating_freq.shape)
+        # print("inp_r shape:", inp_r.shape)
+        # print("inp_r.sum(axis=0) shape:", inp_r.sum(axis=0).shape)
+
         rating_freq += inp_r.sum(axis=0)
     
     log_rating_freq = np.log(rating_freq + 1e-8)
@@ -613,6 +644,9 @@ if __name__ == '__main__':
         act = Logistic
     elif activation_function == 'softplus':
         act = Softplus
+    
+    print("hidden_size:", hidden_size)
+
     layers_act = [act('layer_%d' % i) for i in range(len(hidden_size))]
     NADE_CF_model = tabula_NADE(activations=layers_act,
                                 input_dim0=input_dim0,
@@ -711,9 +745,11 @@ if __name__ == '__main__':
     best_polyak = cp.deepcopy(shared_polyak)
     start_training_time = t.time()
     lr_tracer = []
-    rate_score = np.array([1, 2, 3, 4, 5], np.float32)
+    # rate_score = np.array([1, 2, 3, 4, 5], np.float32)
+    rate_score = np.array([1, 2], np.float32)
+    
     while(epoch < n_iter and nb_of_epocs_without_improvement < look_ahead):        
-        print 'Epoch {0}'.format(epoch)
+        print ('Epoch {0}'.format(epoch))
         epoch += 1
         start_time_epoch = t.time()
         cost_train = []
@@ -721,9 +757,13 @@ if __name__ == '__main__':
         n_sample_train = []
         cntt = 0
         train_time = 0
-        for batch in train_loop_stream.get_epoch_iterator():
+        for batch in tqdm(train_loop_stream.get_epoch_iterator()):
             
             inp_r, out_r, inp_m, out_m = batch
+            # print("inp_r", inp_r, 
+            #       "out_r", out_r, 
+            #       "inp_m", inp_m, 
+            #       "out_m", out_m )
             train_t = t.time()
             cost_value = f_get_grad(inp_r, inp_m, out_r, out_m)
             train_time += t.time() - train_t
@@ -734,9 +774,21 @@ if __name__ == '__main__':
                 f_update_parameters(lr)
             f_update_polyak()
             pred_ratings = f_monitor(inp_r)
+            # print(pred_ratings)
+            
             true_r = out_r.argmax(axis=2) + 1
+            # true_r = out_r.argmax(axis=2)
+            
+            
             pred_r = (pred_ratings[0] * rate_score[np.newaxis, np.newaxis, :]).sum(axis=2)
-            pred_r[:, new_items] = 3
+            # print(np.unique(true_r))
+            # print(true_r.min(), true_r.max())
+            
+            # print(np.unique(pred_r))
+            # print(pred_r.min(), pred_r.max())
+            # print(true_r, pred_r)
+            # break
+            pred_r[:, new_items] = 1.5
 #             new_users = np.where((inp_m+out_m).sum(axis=1)==0)[0]
 #             pred_r[new_users,:] = 3
 #             pred_r = pred_ratings[0].argmax(axis=2) + 1
@@ -747,16 +799,16 @@ if __name__ == '__main__':
             n_sample_train.append(n)
             cost_train.append(cost_value)
             cntt+= 1
-            
+        # break
         cost_train = np.array(cost_train).mean()
         squared_error_ = np.array(squared_error_train).sum()
         n_samples = np.array(n_sample_train).sum()
         train_RMSE = np.sqrt(squared_error_ / (n_samples * 1.0 + 1e-8))
         
-        print '\tTraining   ...',
-        print 'Train     :', "RMSE: {0:.6f}".format(train_RMSE), " Cost Error: {0:.6f}".format(cost_train), "Train Time: {0:.6f}".format(train_time), get_done_text(start_time_epoch)
+        print ('\tTraining   ...',)
+        print ('Train     :', "RMSE: {0:.6f}".format(train_RMSE), " Cost Error: {0:.6f}".format(cost_train), "Train Time: {0:.6f}".format(train_time), get_done_text(start_time_epoch))
         
-        print '\tValidating ...',
+        print ('\tValidating ...',)
         start_time = t.time()
         squared_error_valid = []
         n_sample_valid = []
@@ -767,9 +819,10 @@ if __name__ == '__main__':
             pred_ratings = f_monitor(inp_r)
             valid_time += t.time() - valid_t
             true_r = out_r.argmax(axis=2) + 1
+            # true_r = out_r.argmax(axis=2)
             pred_r = (pred_ratings[0] * rate_score[np.newaxis, np.newaxis, :]).sum(axis=2)
             
-            pred_r[:, new_items] = 3
+            pred_r[:, new_items] = 1.5
 #             new_users = np.where(inp_m.sum(axis=1)==0)[0]
 #             pred_r[new_users,:] = 3
             
@@ -783,7 +836,8 @@ if __name__ == '__main__':
         squared_error_ = np.array(squared_error_valid).sum()
         n_samples = np.array(n_sample_valid).sum()
         valid_RMSE = np.sqrt(squared_error_ / (n_samples * 1.0 + 1e-8))
-        print 'Validation:', " RMSE: {0:.6f}".format(valid_RMSE) , "Valid Time: {0:.6f}".format(valid_time), get_done_text(start_time),
+        
+        print ('Validation:', " RMSE: {0:.6f}".format(valid_RMSE) , "Valid Time: {0:.6f}".format(valid_time), get_done_text(start_time),)
         if valid_RMSE < best_valid_error:
             best_epoch = epoch
             nb_of_epocs_without_improvement = 0
@@ -794,7 +848,7 @@ if __name__ == '__main__':
             
             best_model = cp.deepcopy(NADE_CF_model)
             best_polyak = cp.deepcopy(shared_polyak)
-            print '\n\n Got a good one'
+            print( '\n\n Got a good one')
         else:
             nb_of_epocs_without_improvement += 1
             if Optimizer == 'Adadelta':
@@ -802,11 +856,12 @@ if __name__ == '__main__':
             elif nb_of_epocs_without_improvement == look_ahead and lr > 1e-5:
                 nb_of_epocs_without_improvement = 0
                 lr /= 4 
-                print "learning rate is now %s" % lr 
+                print ("learning rate is now %s" % lr )
         lr_tracer.append(lr)
                 
-                
-    print '\n### Training, n_layers=%d' % (len(hidden_size)), get_done_text(start_training_time)
+    print("hidden_size:", hidden_size)
+
+    print ('\n### Training, n_layers=%d' % (len(hidden_size)), get_done_text(start_training_time))
     
     best_y = best_model.apply(input_ratings_cum)
     best_y_cum = T.extra_ops.cumsum(best_y, axis=2)
@@ -814,7 +869,7 @@ if __name__ == '__main__':
     f_monitor_best = theano.function(inputs=[input_ratings],
                                 outputs=[best_predicted_ratings])
     
-    print '\tTesting ...',
+    print ('\tTesting ...',)
     start_time = t.time()
     squared_error_test = []
     n_sample_test = []
@@ -825,8 +880,10 @@ if __name__ == '__main__':
         pred_ratings = f_monitor_best(inp_r)
         test_time += t.time() - test_t
         true_r = out_r.argmax(axis=2) + 1
+        # true_r = out_r.argmax(axis=2)
+        
         pred_r = (pred_ratings[0] * rate_score[np.newaxis, np.newaxis, :]).sum(axis=2)
-        pred_r[:, new_items] = 3
+        pred_r[:, new_items] = 1.5
 #         new_users = np.where(inp_m.sum(axis=1)==0)[0]
 #         pred_r[new_users,:] = 3
 #         pred_r = pred_ratings[0].argmax(axis=2) + 1
@@ -839,15 +896,15 @@ if __name__ == '__main__':
     squared_error_ = np.array(squared_error_test).sum()
     n_samples = np.array(n_sample_test).sum()
     test_RMSE = np.sqrt(squared_error_ / (n_samples * 1.0 + 1e-8))
-    print 'Test:', " RMSE: {0:.6f}".format(test_RMSE) , "Test Time: {0:.6f}".format(test_time), get_done_text(start_time),
-    
+    print ('Test:', " RMSE: {0:.6f}".format(test_RMSE) , "Test Time: {0:.6f}".format(test_time), get_done_text(start_time),)
+
     f = open(os.path.join(output_path, 'Reco_NADE_masked_directly_itembased.txt'), 'a')
     to_write = [str(test_RMSE), str(best_valid_error), str(best_epoch)] + sys.argv[:-1]
     line = " ".join(to_write) + '\n'
     f.write(line)
     f.close()
     
-    print '\tTesting with polyak parameters...',
+    print( '\tTesting with polyak parameters...',)
     best_param_list = []
     [best_param_list.extend(p.parameters) for p in best_model.children]
     f_replace = polyak_replace(best_param_list, best_polyak)
@@ -855,7 +912,7 @@ if __name__ == '__main__':
     cc = 0
     for pp in best_polyak:
         pp_value = pp.get_value()
-        np.save('/tmp/cfnade/%d'%cc, pp_value)
+        np.save(output_path + '/%d'%cc, pp_value)
         cc+=1
     
     
@@ -870,7 +927,7 @@ if __name__ == '__main__':
         test_time += t.time() - test_t
         true_r = out_r.argmax(axis=2) + 1
         pred_r = (pred_ratings[0] * rate_score[np.newaxis, np.newaxis, :]).sum(axis=2)
-        pred_r[:, new_items] = 3
+        pred_r[:, new_items] = 1.5
 #         new_users = np.where(inp_m.sum(axis=1)==0)[0]
 #         pred_r[new_users,:] = 3
 #         pred_r = pred_ratings[0].argmax(axis=2) + 1
@@ -883,7 +940,7 @@ if __name__ == '__main__':
     squared_error_ = np.array(squared_error_test).sum()
     n_samples = np.array(n_sample_test).sum()
     test_RMSE = np.sqrt(squared_error_ / (n_samples * 1.0 + 1e-8))
-    print 'Test:', " RMSE: {0:.6f}".format(test_RMSE) , "Test Time: {0:.6f}".format(test_time), get_done_text(start_time),
+    print ('Test:', " RMSE: {0:.6f}".format(test_RMSE) , "Test Time: {0:.6f}".format(test_time), get_done_text(start_time),)
     
     f = open(os.path.join(output_path, 'Reco_NADE_masked_directly_itembased.txt'), 'a')
     to_write = [str(test_RMSE), str(best_valid_error), str(best_epoch)] + sys.argv[:-1] + ['polyak']
